@@ -7,14 +7,39 @@
 <h1>Index</h1>
 
 <p>
-    <a asp-action="Create">Create New</a>
+    <a asp-action="Create" class="btn btn-secondary">Create New</a>
 </p>
+
+<form asp-action="Index" method="get">
+    <div class="form-group">
+        <label id="Name">Name</label>
+        <input type="text" for="Name" name="Name" class="form-control"/>
+    </div>
+    <div class="form-group">
+        <label id="MinPrice">MinPrice</label>
+        <input type="number" for="MinPrice" name="MinPrice" class="form-control" />
+    </div>
+    <div class="form-group">
+        <label id="MaxPrice">MaxPrice</label>
+        <input type="number" for="MaxPrice" name="MaxPrice" class="form-control" />
+    </div>
+    <div class="form-group">
+        <label id="Category">Category</label>
+        <select for="Category" name="CategoryId" class="form-select form-control">
+            <option value="@null"></option>
+            @foreach(var c in (List<CategoryResponse>)ViewBag.Categories)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+        </select>
+    </div>
+    <button type="reset" class="btn btn-warning">Reset</button>
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
 <table class="table">
     <thead>
         <tr>
-            <th>
-                @Html.DisplayNameFor(model => model.Id)
-            </th>
             <th>
                 @Html.DisplayNameFor(model => model.Name)
             </th>
@@ -28,26 +53,25 @@
         </tr>
     </thead>
     <tbody>
-@foreach (var item in Model) {
-        <tr>
-            <td>
-                @Html.DisplayFor(modelItem => item.Id)
-            </td>
-            <td>
-                @Html.DisplayFor(modelItem => item.Name)
-            </td>
-            <td>
-                @Math.Round(item.Price / 100.0 ,2) €
-            </td>
-            <td>
-                @Html.DisplayFor(modelItem => item.CategoryName)
-            </td>
-            <td>
-                @Html.ActionLink("Edit", "Edit", new { /* id=item.PrimaryKey */ }) |
-                @Html.ActionLink("Details", "Details", new { /* id=item.PrimaryKey */ }) |
-                @Html.ActionLink("Delete", "Delete", new { /* id=item.PrimaryKey */ })
-            </td>
-        </tr>
-}
+        @foreach (var item in Model) {
+                <tr>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Name)
+                    </td>
+                    <td>
+                        @Math.Round(item.Price / 100.0 ,2) €
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.CategoryName)
+                    </td>
+                    <td class="d-flex gap-1">
+                        <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-primary">Details</a>
+                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-warning">Edit</a>
+                        <form asp-action="Delete" asp-route-id="@item.Id" method="post" class="d-inline">
+                            <button class="btn btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+        }
     </tbody>
 </table>

@@ -2,7 +2,7 @@
 
 > **Destiné aux apprenants** — Ce README explique pas à pas comment ce projet est structuré,
 > comment Entity Framework Core a été mis en place en approche **Code First**, et quel est
-> le **flux du code** de la requête HTTP jusqu'à la réponse affichée dans le navigateur.
+> le **flux du code** pour chaque opération CRUD, de la requête HTTP jusqu'à la réponse HTML.
 
 ---
 
@@ -10,8 +10,14 @@
 
 1. [Vue d'ensemble du projet](#1-vue-densemble-du-projet)
 2. [Structure des dossiers](#2-structure-des-dossiers)
-3. [Flux du code — comment tout se connecte](#3-flux-du-code--comment-tout-se-connecte)
-4. [Setup Entity Framework Core (Code First) — pas à pas](#4-setup-entity-framework-core-code-first--pas-à-pas)
+3. [Routes disponibles](#3-routes-disponibles)
+4. [Flux du code — toutes les opérations CRUD](#4-flux-du-code--toutes-les-opérations-crud)
+   - [READ — Liste avec filtres (Index)](#read--liste-avec-filtres-index)
+   - [READ — Détail d'un produit (Details)](#read--détail-dun-produit-details)
+   - [CREATE — Formulaire + soumission](#create--formulaire--soumission)
+   - [UPDATE — Édition + soumission](#update--édition--soumission)
+   - [DELETE — Suppression](#delete--suppression)
+5. [Setup Entity Framework Core (Code First) — pas à pas](#5-setup-entity-framework-core-code-first--pas-à-pas)
    - [Étape 1 — Installer les packages NuGet](#étape-1--installer-les-packages-nuget)
    - [Étape 2 — Créer les Entités](#étape-2--créer-les-entités)
    - [Étape 3 — Créer les Configurations Fluent API](#étape-3--créer-les-configurations-fluent-api)
@@ -19,25 +25,27 @@
    - [Étape 5 — Configurer la chaîne de connexion](#étape-5--configurer-la-chaîne-de-connexion)
    - [Étape 6 — Enregistrer le DbContext dans Program.cs](#étape-6--enregistrer-le-dbcontext-dans-programcs)
    - [Étape 7 — Créer et appliquer les Migrations](#étape-7--créer-et-appliquer-les-migrations)
-5. [Fluent API — référence des configurations utilisées](#5-fluent-api--référence-des-configurations-utilisées)
-6. [Explication de chaque fichier du projet](#6-explication-de-chaque-fichier-du-projet)
-7. [Le pattern DTO + Mapper expliqué](#7-le-pattern-dto--mapper-expliqué)
-8. [Injection de dépendances expliquée](#8-injection-de-dépendances-expliquée)
-9. [Lancer le projet](#9-lancer-le-projet)
+6. [Fluent API — référence des configurations utilisées](#6-fluent-api--référence-des-configurations-utilisées)
+7. [Explication de chaque fichier du projet](#7-explication-de-chaque-fichier-du-projet)
+8. [Le pattern DTO + Mapper expliqué](#8-le-pattern-dto--mapper-expliqué)
+9. [Injection de dépendances expliquée](#9-injection-de-dépendances-expliquée)
+10. [Lancer le projet](#10-lancer-le-projet)
 
 ---
 
 ## 1. Vue d'ensemble du projet
 
-Ce projet est une application **ASP.NET Core MVC** (.NET 10) qui illustre un CRUD
-(Create, Read, Update, Delete) sur des **Produits** organisés en **Catégories**.
+Ce projet est une application **ASP.NET Core MVC** (.NET 10) qui illustre un CRUD complet
+(Create, Read, Update, Delete) sur des **Produits** organisés en **Catégories**,
+avec un système de **filtrage dynamique** sur la liste.
 
 | Technologie | Rôle |
 |---|---|
 | ASP.NET Core MVC | Framework web — gère les requêtes HTTP via des Contrôleurs |
 | Entity Framework Core 10 | ORM — fait le lien entre les classes C# et la base de données SQL |
 | SQL Server (LocalDB) | Base de données relationnelle |
-| Razor Views (`.cshtml`) | Moteur de templates pour générer le HTML |
+| Razor Views (`.cshtml`) | Moteur de templates pour générer le HTML côté serveur |
+| Data Annotations | Validation des formulaires côté serveur et client |
 
 > **Code First** signifie qu'on écrit d'abord le code C# (les classes, les configurations),
 > puis EF Core **génère le SQL** pour créer la base de données. On ne touche jamais
@@ -50,167 +58,349 @@ Ce projet est une application **ASP.NET Core MVC** (.NET 10) qui illustre un CRU
 ```
 TI_Devops2026_DemoAspCrud/
 │
-├── 📁 Entities/                  ← Les classes qui représentent les tables SQL
-│   ├── Product.cs                  Table "Product"
-│   └── Category.cs                 Table "Category"
+├── 📁 Entities/                      ← Classes qui représentent les tables SQL (POCO)
+│   ├── Product.cs                      Table "Product"
+│   └── Category.cs                     Table "Category"
 │
-├── 📁 Configurations/            ← Règles de la base de données (Fluent API)
-│   ├── ProductConfiguration.cs     Structure + contraintes de la table Product
-│   └── CategoryConfiguration.cs    Structure + contraintes de la table Category
+├── 📁 Configurations/                ← Règles de la base de données (Fluent API)
+│   ├── ProductConfiguration.cs         Contraintes, index, relations, seed data Product
+│   └── CategoryConfiguration.cs        Contraintes, index, relations, seed data Category
 │
-├── 📁 Contexts/                  ← Point d'entrée vers la base de données
-│   └── DemoAspCrudContext.cs       Le DbContext EF Core
+├── 📁 Contexts/                      ← Point d'entrée vers la base de données
+│   └── DemoAspCrudContext.cs            Le DbContext EF Core
 │
-├── 📁 Migrations/                ← Historique des modifications de la BDD (généré auto)
-│   ├── 20260310103236_init.cs      Première migration : création des tables
+├── 📁 Migrations/                    ← Historique des modifications BDD (généré auto)
+│   ├── 20260310103236_init.cs           Première migration : création des tables + seed
+│   ├── 20260310103236_init.Designer.cs  Métadonnées internes EF Core
 │   └── DemoAspCrudContextModelSnapshot.cs  Snapshot de l'état actuel du modèle
 │
-├── 📁 Models/                    ← DTOs (objets de transfert de données vers les vues)
-│   ├── ProductIndexResponse.cs     DTO pour la liste des produits
-│   └── ErrorViewModel.cs           ViewModel pour la page d'erreur
+├── 📁 Models/                        ← DTOs : objets de transfert de données
+│   ├── ProductIndexResponse.cs         DTO lecture — liste des produits (sans Description)
+│   ├── ProductDetailsResponse.cs       DTO lecture — détail d'un produit (avec Description)
+│   ├── ProductRequest.cs               DTO écriture — données du formulaire Create/Edit
+│   ├── ProductFilterRequest.cs         DTO filtre — critères de recherche (query string)
+│   ├── CategoryResponse.cs             DTO lecture — catégorie pour les listes déroulantes
+│   └── ErrorViewModel.cs               ViewModel pour la page d'erreur
 │
-├── 📁 Mappers/                   ← Conversion Entité → DTO
-│   └── ProductMappers.cs           Méthodes d'extension de mapping
+├── 📁 Mappers/                       ← Méthodes de conversion Entité ↔ DTO
+│   ├── ProductMappers.cs               Conversions liées à Product (4 méthodes)
+│   └── CategoryMappers.cs              Conversion Category → CategoryResponse
 │
-├── 📁 Controllers/               ← Logique de traitement des requêtes HTTP
-│   ├── HomeController.cs           Pages : accueil, confidentialité, erreur
-│   └── ProductController.cs        Pages : liste des produits
+├── 📁 Controllers/                   ← Logique de traitement des requêtes HTTP
+│   ├── HomeController.cs               Pages génériques : accueil, confidentialité, erreur
+│   └── ProductController.cs            CRUD complet + filtrage des produits
 │
-├── 📁 Views/                     ← Templates HTML (Razor .cshtml)
+├── 📁 Views/                         ← Templates HTML (Razor .cshtml)
 │   ├── Home/
+│   │   ├── Index.cshtml
+│   │   └── Privacy.cshtml
 │   └── Product/
+│       ├── Index.cshtml                Liste des produits + formulaire de filtrage
+│       ├── Details.cshtml              Détail d'un produit
+│       ├── Create.cshtml               Formulaire de création
+│       └── Edit.cshtml                 Formulaire d'édition
 │
-├── appsettings.json              ← Configuration générale (tous environnements)
-├── appsettings.Development.json  ← Configuration de développement (chaîne de connexion)
-├── Program.cs                    ← Point d'entrée : configuration et démarrage
-└── TI_Devops2026_DemoAspCrud.csproj  ← Définition du projet et des packages NuGet
+├── appsettings.json                  ← Configuration commune (tous environnements)
+├── appsettings.Development.json      ← Chaîne de connexion (développement uniquement)
+├── Program.cs                        ← Point d'entrée : configuration et démarrage
+└── TI_Devops2026_DemoAspCrud.csproj  ← Définition du projet et packages NuGet
 ```
 
 ---
 
-## 3. Flux du code — comment tout se connecte
+## 3. Routes disponibles
 
-Voici ce qui se passe **de bout en bout** quand un utilisateur visite `/Product/Index` :
+| Méthode HTTP | URL | Action | Description |
+|---|---|---|---|
+| `GET` | `/` ou `/Home/Index` | `HomeController.Index` | Page d'accueil |
+| `GET` | `/Product/Index` | `ProductController.Index` | Liste des produits |
+| `GET` | `/Product/Index?Name=bass&MinPrice=100` | `ProductController.Index` | Liste filtrée |
+| `GET` | `/Product/Details/3` | `ProductController.Details` | Détail du produit Id=3 |
+| `GET` | `/Product/Create` | `ProductController.Create` | Formulaire de création |
+| `POST` | `/Product/Create` | `ProductController.Create` | Soumettre la création |
+| `GET` | `/Product/Edit/3` | `ProductController.Edit` | Formulaire d'édition pré-rempli |
+| `POST` | `/Product/Edit/3` | `ProductController.Edit` | Soumettre la modification |
+| `POST` | `/Product/Delete/3` | `ProductController.Delete` | Supprimer le produit Id=3 |
+
+---
+
+## 4. Flux du code — toutes les opérations CRUD
+
+### READ — Liste avec filtres (Index)
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  NAVIGATEUR                                                         │
-│  GET https://localhost/Product/Index                                │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │  Requête HTTP
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  PROGRAM.CS — Pipeline de middlewares                               │
-│  UseHttpsRedirection → UseRouting → UseAuthorization                │
-│  MapControllerRoute → route "/Product/Index"                        │
-│              détectée → appel de ProductController.Index()          │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │  Appel de l'action
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  ProductController.Index()                                          │
-│                                                                     │
-│  1. Utilise _demoAspCrudContext (injecté par le DI container)       │
-│  2. Écrit une requête LINQ :                                        │
-│     _context.Products                                               │
-│       .Include(p => p.Category)   ← JOIN avec la table Category     │
-│       .Select(p => p.ToProductIndexResponse())  ← mapping DTO       │
-│       .ToList()                   ← exécution de la requête SQL     │
-└───────────┬──────────────────────────────────┬──────────────────────┘
-            │  LINQ traduit en SQL              │  Résultats C#
-            ▼                                  │
-┌───────────────────────────┐                  │
-│  DemoAspCrudContext       │                  │
-│  (Entity Framework Core)  │                  │
-│                           │                  │
-│  SELECT p.Id, p.Name,     │                  │
-│    p.Price, c.Name AS     │                  │
-│    CategoryName           │                  │
-│  FROM Product p           │                  │
-│  INNER JOIN Category c    │                  │
-│    ON p.CategoryId = c.Id │                  │
-└───────────┬───────────────┘                  │
-            │  Résultats SQL                   │
-            ▼                                  │
-┌───────────────────────────┐                  │
-│  SQL SERVER (LocalDB)     │                  │
-│  Base : DemoAspCrud       │                  │
-│  Tables : Product,        │                  │
-│           Category        │                  │
-└───────────┬───────────────┘                  │
-            │  Lignes de données               │
-            └──────────────────────────────────┘
-                           │
-                           │  List<ProductIndexResponse>
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  ProductMappers.ToProductIndexResponse()                            │
-│                                                                     │
-│  Product (entité BDD)  →  ProductIndexResponse (DTO vue)            │
-│  { Id, Name, Price,        { Id, Name, Price,                       │
-│    Category.Name }           CategoryName }                         │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │  return View(dtos)
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Views/Product/Index.cshtml  (Razor View)                           │
-│  @model List<ProductIndexResponse>                                  │
-│  Génère le HTML final avec les données                              │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │  Réponse HTTP 200 (HTML)
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  NAVIGATEUR — affiche la liste des produits                         │
-└─────────────────────────────────────────────────────────────────────┘
+NAVIGATEUR
+GET /Product/Index?Name=bass&MinPrice=100
+           │
+           ▼
+    [Pipeline ASP.NET Core]
+    UseRouting → ProductController.Index([FromQuery] ProductFilterRequest? filter)
+           │
+           │  filter = { Name="bass", MinPrice=100, MaxPrice=null, CategoryId=null }
+           │  (les paramètres absents de l'URL valent null → filtre non appliqué)
+           ▼
+    IQueryable<Product> query = _context.Products.Include(p => p.Category)
+           │
+           │  Construction progressive de la requête SQL (rien n'est encore exécuté) :
+           ├─ filter.Name != null     → query = query.Where(p => p.Name.Contains("bass"))
+           ├─ filter.MinPrice != null → query = query.Where(p => p.Price >= 100)
+           ├─ filter.MaxPrice == null → (ignoré)
+           └─ filter.CategoryId == null → (ignoré)
+           │
+           │  .ToList() → exécution du SQL final :
+           │
+           ▼
+    ┌──────────────────────────────────────────────────────┐
+    │ SELECT p.Id, p.Name, p.Price, c.Name                 │
+    │ FROM Product p                                       │
+    │ INNER JOIN Category c ON p.CategoryId = c.Id         │
+    │ WHERE p.Name LIKE '%bass%' AND p.Price >= 100        │
+    └──────────────────────────────────────────────────────┘
+           │
+           │  EF Core → List<Product> (entités)
+           │  .Select(p => p.ToProductIndexResponse()) → List<ProductIndexResponse> (DTOs)
+           │
+           ▼
+    ViewBag.Categories = (toutes les catégories pour la liste déroulante du filtre)
+           │
+           ▼
+    return View(dtos)
+           │
+           ▼
+    Views/Product/Index.cshtml
+    @model IEnumerable<ProductIndexResponse>
+    → Affiche le formulaire de filtrage + le tableau des produits
+           │
+           ▼
+    NAVIGATEUR — HTML rendu avec la liste filtrée
 ```
 
 ---
 
-## 4. Setup Entity Framework Core (Code First) — pas à pas
+### READ — Détail d'un produit (Details)
+
+```
+NAVIGATEUR
+GET /Product/Details/3
+           │
+           ▼
+    ProductController.Details([FromRoute] int id)
+    id = 3 (extrait de l'URL)
+           │
+           ▼
+    _context.Products
+        .Include(p => p.Category)         ← JOIN SQL
+        .SingleOrDefault(p => p.Id == 3)  ← WHERE Id = 3
+           │
+           ├─ product == null → return View("Error")
+           │
+           └─ product != null
+                  │
+                  ▼
+           product.ToProductDetailsResponse()
+           → ProductDetailsResponse { Id, Name, Description, Price, CategoryName }
+                  │
+                  ▼
+           Views/Product/Details.cshtml
+           @model ProductDetailsResponse
+           → Affiche toutes les informations du produit
+```
+
+---
+
+### CREATE — Formulaire + soumission
+
+```
+─── ÉTAPE 1 : Afficher le formulaire vide ───────────────────────────────────
+
+NAVIGATEUR
+GET /Product/Create
+           │
+           ▼
+    ProductController.Create() [GET]
+           │
+           ▼
+    _context.Categories.Select(c => c.ToCategoryResponse()).ToList()
+    → ViewBag.Categories = List<CategoryResponse>  (pour la liste déroulante)
+           │
+           ▼
+    return View(new ProductRequest())  ← formulaire vide
+           │
+           ▼
+    Views/Product/Create.cshtml
+    @model ProductRequest
+    → Formulaire HTML avec asp-for, asp-validation-for
+    → Liste déroulante des catégories via ViewBag.Categories
+
+
+─── ÉTAPE 2 : Soumettre le formulaire ───────────────────────────────────────
+
+NAVIGATEUR
+POST /Product/Create
+Body: Name=Bass+Fender&Description=...&Price=140000&CategoryId=2
+           │
+           ▼
+    ProductController.Create([FromForm] ProductRequest request) [POST]
+    Model Binding → ASP.NET Core construit l'objet ProductRequest depuis le body
+           │
+           ├─ ModelState.IsValid == false (ex: Name vide, Price négatif)
+           │       │
+           │       ▼
+           │  Recharge ViewBag.Categories
+           │  return View(request) ← réaffiche le formulaire avec les erreurs
+           │
+           └─ ModelState.IsValid == true
+                  │
+                  ├─ _context.Categories.Any(c => c.Id == request.CategoryId)
+                  │  → false : return View("Error")  (CategoryId invalide)
+                  │
+                  └─ true
+                         │
+                         ▼
+                  request.ToProduct()
+                  → Entité Product { Name, Description, Price, CategoryId }
+                  (Id non défini → sera généré par SQL Server IDENTITY)
+                         │
+                         ▼
+                  _context.Products.Add(p)   ← marque "Added" dans le Change Tracker
+                  _context.SaveChanges()     ← exécute INSERT INTO Product ...
+                         │
+                         ▼
+                  return RedirectToAction("Index")
+                  (PRG Pattern : évite la re-soumission au rafraîchissement)
+```
+
+---
+
+### UPDATE — Édition + soumission
+
+```
+─── ÉTAPE 1 : Afficher le formulaire pré-rempli ─────────────────────────────
+
+NAVIGATEUR
+GET /Product/Edit/3
+           │
+           ▼
+    ProductController.Edit([FromRoute] int id) [GET]
+    id = 3
+           │
+           ▼
+    _context.Products
+        .SingleOrDefault(p => p.Id == 3)
+        ?.ToProductRequest()
+    → ProductRequest pré-rempli avec les valeurs actuelles
+    (ou null si l'Id n'existe pas → return View("Error"))
+           │
+           ▼
+    ViewBag.Categories = ...  (liste déroulante)
+    ViewBag.Id = 3            (l'Id transite par la route, pas par le formulaire)
+           │
+           ▼
+    Views/Product/Edit.cshtml
+    @model ProductRequest
+    → Formulaire pré-rempli, action="Edit" asp-route-id="@ViewBag.Id"
+
+
+─── ÉTAPE 2 : Soumettre les modifications ───────────────────────────────────
+
+NAVIGATEUR
+POST /Product/Edit/3
+Body: Name=Bass+Fender+Pro&Price=160000&CategoryId=2
+           │
+           ▼
+    ProductController.Edit([FromRoute] int id, [FromForm] ProductRequest request) [POST]
+           │
+           ├─ ModelState.IsValid == false → réaffiche le formulaire avec erreurs
+           │
+           └─ ModelState.IsValid == true
+                  │
+                  ▼
+           _context.Products.SingleOrDefault(p => p.Id == 3)
+           → Charge l'entité suivie par le Change Tracker
+           (ou null → return View("Error"))
+                  │
+                  ▼
+           p.Name = request.Name          ← Change Tracker détecte les modifications
+           p.Description = request.Description
+           p.Price = request.Price
+           p.CategoryId = request.CategoryId
+                  │
+                  ▼
+           _context.SaveChanges()
+           → UPDATE Product SET Name=..., Price=... WHERE Id = 3
+                  │
+                  ▼
+           return RedirectToAction("Index")
+```
+
+---
+
+### DELETE — Suppression
+
+```
+NAVIGATEUR
+POST /Product/Delete/3        ← TOUJOURS un POST, jamais un GET (sécurité CSRF)
+(bouton dans un <form method="post"> dans Index.cshtml)
+           │
+           ▼
+    ProductController.Delete([FromRoute] int id) [POST]
+    id = 3
+           │
+           ▼
+    _context.Products.SingleOrDefault(p => p.Id == 3)
+           │
+           ├─ p == null → return View("Error")
+           │
+           └─ p != null
+                  │
+                  ▼
+           _context.Products.Remove(p)  ← marque "Deleted" dans le Change Tracker
+           _context.SaveChanges()       ← DELETE FROM Product WHERE Id = 3
+                  │
+                  ▼
+           return RedirectToAction("Index")
+```
+
+---
+
+## 5. Setup Entity Framework Core (Code First) — pas à pas
 
 ### Étape 1 — Installer les packages NuGet
-
-Dans la **Console du Gestionnaire de packages** (ou `dotnet add package`) :
 
 ```bash
 # ORM de base (obligatoire)
 dotnet add package Microsoft.EntityFrameworkCore
 
-# Fournisseur SQL Server (adapter selon votre SGBD)
+# Fournisseur SQL Server
 dotnet add package Microsoft.EntityFrameworkCore.SqlServer
 
-# Outils pour les migrations (add-migration, update-database…)
+# Outils CLI pour les migrations
 dotnet add package Microsoft.EntityFrameworkCore.Tools
 ```
 
-Dans ce projet (fichier `.csproj`) :
+Dans le fichier `.csproj` de ce projet :
 
 ```xml
 <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.3">
-  <PrivateAssets>all</PrivateAssets>
+  <PrivateAssets>all</PrivateAssets>   <!-- outil de dev uniquement, pas en production -->
 </PackageReference>
 ```
-
-> ⚠️ `Microsoft.EntityFrameworkCore.Tools` a `PrivateAssets>all` car c'est un outil
-> de développement uniquement (commandes CLI), il ne doit pas être embarqué en production.
 
 ---
 
 ### Étape 2 — Créer les Entités
 
 Une **entité** est une classe C# ordinaire dont chaque propriété correspond à une colonne SQL.
-On les place dans un dossier `Entities/` par convention.
 
 ```csharp
 // Entities/Category.cs
 public class Category
 {
-    public int Id { get; set; }           // Clé primaire → PK_Category
+    public int Id { get; set; }
     public string Name { get; set; } = null!;
-
-    public List<Product> Products { get; set; } = [];  // Navigation : 1 catégorie → N produits
+    public List<Product> Products { get; set; } = [];  // navigation : 1 → N
 }
 ```
 
@@ -218,39 +408,32 @@ public class Category
 // Entities/Product.cs
 public class Product
 {
-    public int Id { get; set; }           // Clé primaire → PK_Product
+    public int Id { get; set; }
     public string Name { get; set; } = null!;
-    public string? Description { get; set; } // Nullable → colonne nullable en SQL
+    public string? Description { get; set; }   // nullable → colonne nullable SQL
     public int Price { get; set; }
-    public int CategoryId { get; set; }  // Clé étrangère → FK vers Category
+    public int CategoryId { get; set; }        // clé étrangère
 
-    public Category Category { get; set; } = null!; // Navigation : N produits → 1 catégorie
+    public Category Category { get; set; } = null!;  // navigation : N → 1
 }
 ```
 
-> **Propriétés de navigation** : `Category` dans `Product` et `Products` dans `Category`
-> ne correspondent pas à des colonnes SQL. Ce sont des "ponts" qu'EF Core remplit
-> automatiquement quand on utilise `.Include()` dans une requête.
+> **Propriétés de navigation** (`Category`, `Products`) : ne correspondent à aucune colonne SQL.
+> EF Core les remplit automatiquement quand on utilise `.Include()` dans une requête LINQ.
 
 ---
 
 ### Étape 3 — Créer les Configurations Fluent API
 
-Plutôt que d'utiliser des attributs (Data Annotations) directement sur les entités,
-on utilise la **Fluent API** dans des classes de configuration séparées.
-
-> **Avantage** : les entités restent des classes C# pures, sans dépendance vers EF Core.
-> La configuration est centralisée et plus expressive.
-
-Chaque classe de configuration implémente `IEntityTypeConfiguration<T>` :
+On place les règles de chaque table dans une classe dédiée plutôt que dans le DbContext,
+pour respecter le principe de responsabilité unique.
 
 ```csharp
-// Configurations/ProductConfiguration.cs
 public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
-        // ... voir section 5 pour le détail complet
+        // voir section 6 pour le détail complet
     }
 }
 ```
@@ -259,26 +442,17 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
 ### Étape 4 — Créer le DbContext
 
-Le **DbContext** est la classe centrale d'EF Core. C'est via lui qu'on accède
-à la base de données. Il expose les tables sous forme de `DbSet<T>`.
-
 ```csharp
-// Contexts/DemoAspCrudContext.cs
 public class DemoAspCrudContext : DbContext
 {
-    // Chaque DbSet<T> = une table SQL accessible en LINQ
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Category> Categories => Set<Category>();
 
-    // Le constructeur reçoit les options (chaîne de connexion, provider...)
-    // via l'injection de dépendances configurée dans Program.cs
     public DemoAspCrudContext(DbContextOptions<DemoAspCrudContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Scanne l'assembly et applique TOUTES les classes IEntityTypeConfiguration<T>
-        // trouvées automatiquement → ProductConfiguration et CategoryConfiguration
-        // seront appliquées sans les appeler explicitement
+        // Découvre et applique automatiquement toutes les IEntityTypeConfiguration<T>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DemoAspCrudContext).Assembly);
     }
 }
@@ -288,12 +462,9 @@ public class DemoAspCrudContext : DbContext
 
 ### Étape 5 — Configurer la chaîne de connexion
 
-La chaîne de connexion identifie **où** se trouve la base de données et **comment** s'y connecter.
-On ne la met pas dans `appsettings.json` (tous environnements) mais dans
-`appsettings.Development.json` (développement uniquement) pour ne pas l'exposer en production.
+Dans `appsettings.Development.json` (pas dans `appsettings.json` pour ne pas l'exposer) :
 
 ```json
-// appsettings.Development.json
 {
   "ConnectionStrings": {
     "Default": "server=(localdb)\\MSSQLLocalDB;database=DemoAspCrud;integrated security=true;trust server certificate=true"
@@ -303,133 +474,83 @@ On ne la met pas dans `appsettings.json` (tous environnements) mais dans
 
 | Paramètre | Valeur | Signification |
 |---|---|---|
-| `server` | `(localdb)\\MSSQLLocalDB` | SQL Server LocalDB (installé avec Visual Studio) |
-| `database` | `DemoAspCrud` | Nom de la base de données à créer/utiliser |
-| `integrated security` | `true` | Authentification Windows (pas de login/mdp) |
+| `server` | `(localdb)\\MSSQLLocalDB` | SQL Server LocalDB (inclus avec Visual Studio) |
+| `database` | `DemoAspCrud` | Nom de la base de données |
+| `integrated security` | `true` | Authentification Windows (pas de mot de passe) |
 | `trust server certificate` | `true` | Accepte le certificat auto-signé de LocalDB |
-
-> Pour un **autre SGBD** (MySQL, PostgreSQL…), la chaîne de connexion et le package NuGet changent,
-> mais le reste du code C# reste identique.
 
 ---
 
 ### Étape 6 — Enregistrer le DbContext dans Program.cs
 
-Le DbContext doit être enregistré dans le **conteneur d'injection de dépendances**
-pour qu'ASP.NET Core puisse l'injecter automatiquement dans les contrôleurs.
-
 ```csharp
-// Program.cs
 builder.Services.AddDbContext<DemoAspCrudContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default"))
 );
 ```
 
-- `AddDbContext<T>()` : enregistre le contexte avec un cycle de vie **Scoped**
-  (une nouvelle instance par requête HTTP).
-- `UseSqlServer()` : indique à EF Core d'utiliser SQL Server comme fournisseur.
-- `GetConnectionString("Default")` : lit la clé `ConnectionStrings.Default`
-  depuis `appsettings.Development.json`.
+- `AddDbContext<T>` : cycle de vie **Scoped** (une instance par requête HTTP)
+- `UseSqlServer` : indique à EF Core d'utiliser SQL Server
+- `GetConnectionString("Default")` : lit la clé depuis `appsettings.Development.json`
 
 ---
 
 ### Étape 7 — Créer et appliquer les Migrations
 
-Les **migrations** sont des fichiers C# générés automatiquement qui décrivent
-les changements à apporter à la base de données.
-
-#### Dans la Console du Gestionnaire de packages (Visual Studio) :
-
 ```powershell
-# 1. Créer la première migration (analyse les entités + configurations)
-Add-Migration init
-
-# 2. Appliquer la migration → crée/modifie la base de données
-Update-Database
+# Console Gestionnaire de packages (Visual Studio)
+Add-Migration init       # génère le fichier de migration
+Update-Database          # exécute la migration sur la base
 ```
 
-#### Ou avec la CLI .NET :
-
 ```bash
+# CLI .NET
 dotnet ef migrations add init
 dotnet ef database update
 ```
 
-> **Que se passe-t-il lors d'`Add-Migration` ?**
-> EF Core compare l'état actuel de vos entités/configurations avec le dernier
-> snapshot de migration, puis génère un fichier C# décrivant les différences
-> (créer une table, ajouter une colonne, etc.).
-
-> **Workflow habituel lors d'une modification :**
+> **Workflow lors d'une modification du modèle :**
 > 1. Modifier une entité ou une configuration
-> 2. `Add-Migration <nom_descriptif>` (ex: `Add-Migration AjoutColonnePrixPromo`)
+> 2. `Add-Migration NomDescriptif` (ex: `Add-Migration AjoutColonnePrixPromo`)
 > 3. `Update-Database`
 
 ---
 
-## 5. Fluent API — référence des configurations utilisées
+## 6. Fluent API — référence des configurations utilisées
 
-### Définir le nom de la table et la clé primaire
+### Nom de la table, clé primaire et contrainte CHECK
 
 ```csharp
-builder.ToTable("Product")   // Nom de la table SQL (sinon EF utilise le nom de la classe)
-       .HasKey(p => p.Id);   // Clé primaire
+builder.ToTable("Product", t => t.HasCheckConstraint("CK_PRODUCT_PRICE", "PRICE >= 0"))
+       .HasKey(p => p.Id);
 ```
 
-### Configurer les propriétés / colonnes
+### Propriétés / colonnes
 
 ```csharp
-builder.Property(p => p.Id)
-    .ValueGeneratedOnAdd();           // IDENTITY(1,1) → auto-increment SQL Server
-
-builder.Property(p => p.Name)
-    .IsRequired()                     // NOT NULL
-    .HasMaxLength(50);                // NVARCHAR(50)
-
-builder.Property(p => p.Description)
-    .HasMaxLength(500);               // Nullable par défaut car string? dans l'entité
+builder.Property(p => p.Id).ValueGeneratedOnAdd();          // IDENTITY → auto-increment
+builder.Property(p => p.Name).IsRequired().HasMaxLength(50); // NOT NULL NVARCHAR(50)
+builder.Property(p => p.Description).HasMaxLength(500);      // nullable, NVARCHAR(500)
+builder.Property(p => p.Price).IsRequired();                 // NOT NULL
 ```
 
-### Ajouter une contrainte CHECK
+### Index unique
 
 ```csharp
-builder.ToTable("Product", t =>
-    t.HasCheckConstraint("CK_PRODUCT_PRICE", "PRICE >= 0")  // Nom + expression SQL
-);
+builder.HasIndex(p => p.Name).IsUnique();  // deux produits ne peuvent pas avoir le même nom
 ```
 
-> ⚠️ L'expression SQL dans la contrainte CHECK utilise le **nom de colonne SQL**,
-> pas le nom de la propriété C#. Ici `PRICE` est le nom de la colonne générée.
-
-### Créer un index unique
+### Relation One-to-Many
 
 ```csharp
-builder.HasIndex(p => p.Name)
-    .IsUnique();   // Deux produits ne peuvent pas avoir le même nom
-```
-
-### Configurer une relation One-to-Many
-
-```csharp
-// Côté "Many" (Product) → façon recommandée car on est dans ProductConfiguration
-builder.HasOne(p => p.Category)         // Un produit a UNE catégorie
-    .WithMany(c => c.Products)          // Une catégorie a PLUSIEURS produits
-    .HasForeignKey(p => p.CategoryId)   // La FK est CategoryId dans Product
-    .IsRequired();                      // FK NOT NULL (un produit doit avoir une catégorie)
-```
-
-```csharp
-// Côté "One" (Category) → façon équivalente depuis CategoryConfiguration
-builder.HasMany(c => c.Products)        // Une catégorie a PLUSIEURS produits
-    .WithOne(p => p.Category)           // Un produit a UNE catégorie
+// Depuis ProductConfiguration (côté "Many")
+builder.HasOne(p => p.Category)
+    .WithMany(c => c.Products)
     .HasForeignKey(p => p.CategoryId)
-    .IsRequired();
+    .IsRequired();   // FK NOT NULL
 ```
 
-> Les deux écritures sont équivalentes et décrivent la **même relation**.
-> Il suffit de la définir **une seule fois** (dans l'une ou l'autre configuration).
-
-### Ajouter des données initiales (Seed Data)
+### Seed Data (données initiales)
 
 ```csharp
 builder.HasData(new List<Category>
@@ -440,247 +561,218 @@ builder.HasData(new List<Category>
 });
 ```
 
-> ⚠️ Les `Id` **doivent être fixés manuellement** dans le seed data.
-> EF Core compare ces valeurs entre migrations pour savoir si des données
-> ont été ajoutées, modifiées ou supprimées.
+> ⚠️ Les `Id` doivent être fixés manuellement : EF Core s'en sert pour détecter
+> les ajouts/modifications/suppressions entre migrations.
 
 ---
 
-## 6. Explication de chaque fichier du projet
+## 7. Explication de chaque fichier du projet
 
-### `Program.cs` — Point d'entrée et configuration
+### `Program.cs` — Point d'entrée
 
 ```
-WebApplication.CreateBuilder(args)
-        │
-        ├── Services.AddControllersWithViews()   → Active le pattern MVC
-        └── Services.AddDbContext<...>()          → Enregistre EF Core
-                │
-        app.Build()
-                │
-                ├── UseHttpsRedirection()   → HTTP → HTTPS automatique
-                ├── UseRouting()            → Analyse l'URL
-                ├── UseAuthorization()      → Vérifie les permissions
-                ├── MapStaticAssets()       → Sert CSS/JS/images
-                └── MapControllerRoute()   → Associe URL → Controller.Action
-                        │
-                app.Run()  → Démarre le serveur, écoute les requêtes
+CreateBuilder → enregistrement des services → Build
+                                                │
+   AddControllersWithViews()  → pattern MVC    │
+   AddDbContext<...>()        → EF Core + SQL  │
+                                                ▼
+                              Pipeline de middlewares
+                              UseHttpsRedirection
+                              UseRouting
+                              UseAuthorization
+                              MapStaticAssets
+                              MapControllerRoute("{controller=Home}/{action=Index}/{id?}")
+                                                │
+                              app.Run()  → serveur en écoute
 ```
 
 ---
 
-### `Entities/Product.cs` et `Entities/Category.cs` — Les tables SQL
+### `Entities/` — Les tables SQL
 
-Ces classes sont des **POCO** (Plain Old CLR Object) : de simples classes C# sans logique.
-EF Core les transforme en tables SQL via les configurations.
+Ces classes sont des **POCO** (Plain Old CLR Object) : simples classes C# sans logique.
 
 ```
-Classe C#          →   Table SQL
-─────────────────────────────────────
-Product.Id         →   INT IDENTITY PK
-Product.Name       →   NVARCHAR(50) NOT NULL UNIQUE
-Product.Description→   NVARCHAR(500) NULL
-Product.Price      →   INT NOT NULL CHECK(PRICE >= 0)
-Product.CategoryId →   INT NOT NULL FK → Category.Id
+Propriété C#          →  Colonne SQL
+──────────────────────────────────────────────────
+Product.Id            →  INT IDENTITY NOT NULL PK
+Product.Name          →  NVARCHAR(50) NOT NULL UNIQUE
+Product.Description   →  NVARCHAR(500) NULL
+Product.Price         →  INT NOT NULL CHECK(PRICE >= 0)
+Product.CategoryId    →  INT NOT NULL FK → Category.Id
+──────────────────────────────────────────────────
+Category.Id           →  INT IDENTITY NOT NULL PK
+Category.Name         →  NVARCHAR(50) NOT NULL UNIQUE
 ```
 
 ---
 
-### `Configurations/ProductConfiguration.cs` et `CategoryConfiguration.cs` — Les règles SQL
+### `Models/` — Les DTOs
 
-Ces classes contiennent toutes les règles qui seront traduites en SQL :
-contraintes, index, relations, longueurs de colonnes, données initiales.
+| Fichier | Type | Direction | Utilisé par |
+|---|---|---|---|
+| `ProductIndexResponse` | `record` | BDD → Vue | `Index` — liste, sans Description |
+| `ProductDetailsResponse` | `record` | BDD → Vue | `Details` — détail, avec Description |
+| `ProductRequest` | `class` | Formulaire → BDD | `Create` et `Edit` |
+| `ProductFilterRequest` | `record` | URL → Contrôleur | `Index` — critères de filtre |
+| `CategoryResponse` | `record` | BDD → Vue | Listes déroulantes dans `Create`/`Edit`/`Index` |
+| `ErrorViewModel` | `class` | Contrôleur → Vue | Page d'erreur |
 
-Elles implémentent `IEntityTypeConfiguration<T>` et sont **découvertes automatiquement**
-par `ApplyConfigurationsFromAssembly()` dans le DbContext.
-
----
-
-### `Contexts/DemoAspCrudContext.cs` — La passerelle vers la BDD
-
-C'est **l'objet central** d'EF Core. Il :
-- Expose les tables via les propriétés `DbSet<T>`
-- Gère la connexion SQL (ouverture, fermeture, transactions)
-- Suit les modifications des entités (Unit of Work pattern)
-- Traduit les requêtes LINQ en SQL
+> **Pourquoi `record` pour les réponses et `class` pour les requêtes ?**
+> Les `record` sont immuables (on ne modifie pas une réponse après sa création).
+> Les `class` sont nécessaires pour les formulaires car le **model binder** d'ASP.NET Core
+> doit pouvoir instancier l'objet et assigner ses propriétés une par une.
 
 ---
 
-### `Migrations/` — L'historique de la base de données
-
-| Fichier | Rôle |
-|---|---|
-| `20260310103236_init.cs` | Décrit les opérations SQL de la 1ère migration (Up/Down) |
-| `20260310103236_init.Designer.cs` | Métadonnées utilisées par EF Core en interne |
-| `DemoAspCrudContextModelSnapshot.cs` | Snapshot de l'état actuel du modèle EF Core |
-
-> ⚠️ **Ne jamais modifier ces fichiers à la main.**
-> Ils sont générés par EF Core et toute modification manuelle peut corrompre l'historique.
-
----
-
-### `Models/ProductIndexResponse.cs` — Le DTO de la vue Index
+### `Models/ProductRequest.cs` — Validation des formulaires
 
 ```csharp
-public record ProductIndexResponse(int Id, string Name, int Price, string CategoryName);
-```
+[Required(ErrorMessage = "...")]     // champ obligatoire
+[MaxLength(50, ErrorMessage = "...")] // cohérent avec HasMaxLength(50) en base
+public string Name { get; set; }
 
-Un **DTO** (Data Transfer Object) est un objet dont le seul rôle est de transporter
-des données d'un endroit à un autre. Ici, de la couche données vers la vue.
+[Range(0, int.MaxValue)]             // remplace la contrainte CHECK SQL côté formulaire
+public int Price { get; set; }
 
-Un `record` C# est parfait pour ça car :
-- **Immuable** : ses valeurs ne changent pas après création
-- **Concis** : propriétés déclarées en une ligne (positional record)
-- **Égalité par valeur** : deux records avec les mêmes valeurs sont considérés égaux
-
----
-
-### `Models/ErrorViewModel.cs` — Le ViewModel d'erreur
-
-```csharp
-public class ErrorViewModel
-{
-    public string? RequestId { get; set; }
-    public bool ShowRequestId => !string.IsNullOrEmpty(RequestId); // propriété calculée
-}
-```
-
-Utilisé par la vue d'erreur pour afficher l'identifiant de la requête en développement,
-ce qui aide au débogage dans les logs.
-
----
-
-### `Mappers/ProductMappers.cs` — La conversion Entité → DTO
-
-```csharp
-public static class ProductMappers
-{
-    // Méthode d'extension : s'appelle comme product.ToProductIndexResponse()
-    public static ProductIndexResponse ToProductIndexResponse(this Product p)
-    {
-        return new ProductIndexResponse(p.Id, p.Name, p.Price, p.Category.Name);
-    }
-}
-```
-
-Ce fichier centralise la logique de conversion. Si la structure du DTO change,
-on ne modifie qu'ici, pas dans chaque contrôleur.
-
-> ⚠️ Ce mapper accède à `p.Category.Name`. Pour que ça fonctionne, la propriété
-> de navigation `Category` doit être chargée au préalable avec `.Include(p => p.Category)`
-> dans la requête EF Core. Sans ça → `NullReferenceException`.
-
----
-
-### `Controllers/HomeController.cs` — Pages génériques
-
-```csharp
-public class HomeController : Controller
-{
-    public IActionResult Index()   → GET /Home/Index  (page d'accueil)
-    public IActionResult Privacy() → GET /Home/Privacy
-    public IActionResult Error()   → appelé automatiquement en cas d'exception
-}
+[DisplayName("Category")]            // change le label affiché dans la vue Razor
+public int CategoryId { get; set; }
 ```
 
 ---
 
-### `Controllers/ProductController.cs` — CRUD Produits
+### `Models/ProductFilterRequest.cs` — Filtrage par query string
 
-```csharp
-public class ProductController : Controller
-{
-    // DemoAspCrudContext injecté automatiquement par le DI container
-    private readonly DemoAspCrudContext _demoAspCrudContext;
-
-    public IActionResult Index() → GET /Product/Index  (liste des produits)
-    // D'autres actions CRUD (Create, Edit, Delete) seront ajoutées ici
-}
+```
+URL : /Product/Index?Name=bass&MinPrice=100
+                         │          │
+                         ▼          ▼
+ProductFilterRequest { Name="bass", MinPrice=100, MaxPrice=null, CategoryId=null }
+                                                       │               │
+                                               filtre ignoré    filtre ignoré
 ```
 
 ---
 
-### `appsettings.json` et `appsettings.Development.json` — Configuration
+### `Mappers/` — Les conversions
 
-```
-appsettings.json              → Configuration commune à TOUS les environnements
-appsettings.Development.json  → Surcharge pour le développement local
-appsettings.Production.json   → (à créer) Surcharge pour la production
-```
-
-ASP.NET Core fusionne automatiquement ces fichiers selon la variable
-d'environnement `ASPNETCORE_ENVIRONMENT`. En développement, les valeurs de
-`appsettings.Development.json` **écrasent** celles de `appsettings.json`.
-
-> 🔒 **Bonne pratique** : ne jamais mettre de chaîne de connexion avec mot de passe
-> dans `appsettings.json`. Utiliser `appsettings.Development.json` (en local)
-> ou des variables d'environnement / Azure Key Vault (en production).
+| Méthode | Conversion | Utilisée dans |
+|---|---|---|
+| `ToProductIndexResponse()` | `Product` → `ProductIndexResponse` | `Index` |
+| `ToProductDetailsResponse()` | `Product` → `ProductDetailsResponse` | `Details` |
+| `ToProduct()` | `ProductRequest` → `Product` | `Create` POST |
+| `ToProductRequest()` | `Product` → `ProductRequest` | `Edit` GET |
+| `ToCategoryResponse()` | `Category` → `CategoryResponse` | `Index`, `Create`, `Edit` |
 
 ---
 
-## 7. Le pattern DTO + Mapper expliqué
+### `Controllers/ProductController.cs` — Récapitulatif des actions
+
+| Action | Méthode | Description |
+|---|---|---|
+| `Index` | `GET` | Liste filtrée via `IQueryable` + `ProductFilterRequest` |
+| `Details` | `GET` | Détail d'un produit par Id |
+| `Create` | `GET` | Affiche le formulaire vide |
+| `Create` | `POST` | Valide + insère en base + redirige (PRG) |
+| `Edit` | `GET` | Affiche le formulaire pré-rempli |
+| `Edit` | `POST` | Valide + met à jour via Change Tracker + redirige (PRG) |
+| `Delete` | `POST` | Supprime + redirige (PRG) |
+
+---
+
+### `Views/Product/` — Les vues Razor
+
+| Vue | Modèle reçu | Données supplémentaires |
+|---|---|---|
+| `Index.cshtml` | `IEnumerable<ProductIndexResponse>` | `ViewBag.Categories` → filtre |
+| `Details.cshtml` | `ProductDetailsResponse` | — |
+| `Create.cshtml` | `ProductRequest` (vide) | `ViewBag.Categories` → liste déroulante |
+| `Edit.cshtml` | `ProductRequest` (pré-rempli) | `ViewBag.Categories`, `ViewBag.Id` |
+
+> **`asp-for`** dans les formulaires : génère automatiquement `name`, `id`, `value`
+> et les attributs `data-val-*` pour la validation côté client.
+>
+> **`asp-validation-for`** : affiche le message d'erreur de validation pour un champ.
+>
+> **`@section Scripts`** dans Create et Edit : charge les scripts jQuery Validate
+> pour activer la validation côté client sans rechargement de page.
+
+---
+
+### `appsettings.json` et `appsettings.Development.json`
 
 ```
-┌─────────────────┐     ┌───────────────┐     ┌──────────────────────────┐
-│  Base de données │     │   Entité C#   │     │     DTO (Record C#)       │
-│                 │     │               │     │                          │
-│  Table Product  │ EF  │  class Product│Mapper│ record ProductIndexResponse│
-│  ─────────────  │────▶│  {            │─────▶│ (                        │
-│  Id             │Core │    Id,        │     │     int Id,              │
-│  Name           │     │    Name,      │     │     string Name,         │
-│  Description    │     │    Description│     │     int Price,           │
-│  Price          │     │    Price,     │     │     string CategoryName  │
-│  CategoryId     │     │    CategoryId,│     │ )                        │
-│                 │     │    Category ← │     │                          │
-└─────────────────┘     └───────────────┘     └──────────────┬───────────┘
-                                                             │
-                                                             ▼
-                                                    ┌────────────────┐
-                                                    │  Vue Razor     │
-                                                    │  Index.cshtml  │
-                                                    └────────────────┘
+appsettings.json              → Logging, AllowedHosts (commun à tous les environnements)
+appsettings.Development.json  → ConnectionStrings (développement uniquement)
+```
+
+ASP.NET Core fusionne ces fichiers automatiquement selon `ASPNETCORE_ENVIRONMENT`.
+Les valeurs de `Development` **écrasent** celles de `appsettings.json`.
+
+> 🔒 Ne jamais mettre de mot de passe dans `appsettings.json`.
+> En production : variables d'environnement ou Azure Key Vault.
+
+---
+
+## 8. Le pattern DTO + Mapper expliqué
+
+```
+┌──────────────┐      ┌──────────────┐      ┌────────────────────────┐
+│   Base de    │  EF  │   Entité C#  │Mapper│         DTO            │
+│   données    │ Core │              │      │                        │
+│              │      │  Product {   │─────▶│ ProductIndexResponse(  │  → Vue Index
+│  Product     │─────▶│    Id        │      │   Id, Name,            │
+│  Category    │      │    Name      │─────▶│   Price, CategoryName  │
+│              │      │    Desc.     │      │ )                      │
+│              │      │    Price     │      │                        │
+│              │      │    CategoryId│─────▶│ ProductDetailsResponse(│  → Vue Details
+│              │      │    Category ←│      │   Id, Name, Desc.,     │
+└──────────────┘      └──────────────┘      │   Price, CategoryName  │
+                                            │ )                      │
+                                            └────────────────────────┘
+                       ProductRequest  ─────────────────────────────▶  Formulaire
+                       (formulaire)   ◀─────────────────────────────   (pré-remplissage)
 ```
 
 **Pourquoi ce pattern ?**
-- **Sécurité** : on choisit exactement quelles données exposer à la vue
-- **Découplage** : si la structure de la table change, la vue ne change pas forcément
-- **Simplicité** : la vue reçoit un objet plat et simple, pas un graphe d'objets liés
-- **Performance** : on peut ne sélectionner que les colonnes nécessaires (projection SQL)
+- **Sécurité** : on expose uniquement les champs nécessaires à chaque vue
+- **Découplage** : une modification de la table n'impacte pas forcément les vues
+- **Validité** : `ProductRequest` porte les règles de validation du formulaire
+- **Performance** : on ne sélectionne que les colonnes nécessaires (projection SQL)
 
 ---
 
-## 8. Injection de dépendances expliquée
-
-L'**injection de dépendances** (DI) est le mécanisme par lequel ASP.NET Core
-crée et fournit automatiquement les objets dont un contrôleur a besoin.
+## 9. Injection de dépendances expliquée
 
 ```
 Program.cs
   builder.Services.AddDbContext<DemoAspCrudContext>(...)
                        │
-                       │  "Je sais créer un DemoAspCrudContext"
+                       │  Le conteneur DI sait maintenant créer un DemoAspCrudContext
                        ▼
-              Conteneur DI (IServiceProvider)
-                       │
-                       │  Requête HTTP arrive sur /Product/Index
-                       │  → ASP.NET Core doit créer ProductController
-                       │  → ProductController a besoin d'un DemoAspCrudContext
-                       │  → Le conteneur en crée un et l'injecte
-                       ▼
-              public ProductController(DemoAspCrudContext demoAspCrudContext)
-              {
-                  _demoAspCrudContext = demoAspCrudContext; ✅
-              }
+         ┌─────────────────────────────────┐
+         │  Conteneur DI (IServiceProvider) │
+         └───────────────┬─────────────────┘
+                         │  Requête HTTP → /Product/Index
+                         │  ASP.NET Core doit instancier ProductController
+                         │  ProductController a besoin d'un DemoAspCrudContext
+                         │  → Le conteneur le crée et l'injecte
+                         ▼
+         public ProductController(DemoAspCrudContext ctx)
+         {
+             _demoAspCrudContext = ctx; ✅
+         }
+         // En fin de requête : le contexte est automatiquement Dispose()
 ```
 
 **Avantages :**
-- On ne fait jamais `new DemoAspCrudContext()` à la main
-- Le cycle de vie est géré automatiquement (connexion ouverte/fermée proprement)
+- On ne fait jamais `new DemoAspCrudContext()` manuellement
+- La connexion SQL est gérée automatiquement (Scoped = une par requête HTTP)
 - Facilite les tests unitaires (on peut injecter un faux contexte)
 
 ---
 
-## 9. Lancer le projet
+## 10. Lancer le projet
 
 ### Prérequis
 
@@ -698,29 +790,22 @@ cd TI_Devops2026_DemoAspCrud
 # 2. Restaurer les packages NuGet
 dotnet restore
 
-# 3. Appliquer les migrations (crée la base de données DemoAspCrud en LocalDB)
+# 3. Créer la base de données et insérer les données de départ
 dotnet ef database update
 
 # 4. Lancer l'application
 dotnet run
 ```
 
-Ou dans **Visual Studio** : `F5` (avec débogage) ou `Ctrl+F5` (sans débogage).
+Ou dans Visual Studio : **F5** (débogage) ou **Ctrl+F5** (sans débogage).
 
-> La base de données est créée **automatiquement** par EF Core lors du premier
-> `Update-Database` / `dotnet ef database update`. Les données de seed (produits
-> et catégories) sont insérées dans la même opération.
+> La commande `dotnet ef database update` crée la base `DemoAspCrud` dans SQL Server LocalDB
+> et insère automatiquement les 3 catégories et les 3 produits définis dans le seed data.
 
-### URLs disponibles
+### URLs de démarrage
 
-| URL | Contrôleur | Action |
-|---|---|---|
-| `/` ou `/Home/Index` | HomeController | Index |
-| `/Home/Privacy` | HomeController | Privacy |
-| `/Product/Index` | ProductController | Index |
-
----
-
-> 💡 **Pour aller plus loin** : les prochaines étapes naturelles de ce projet seraient
-> d'ajouter les actions `Create`, `Edit` et `Delete` dans `ProductController`,
-> avec leurs vues Razor correspondantes, pour compléter le CRUD.
+| URL | Page |
+|---|---|
+| `https://localhost:{port}/` | Page d'accueil |
+| `https://localhost:{port}/Product/Index` | Liste des produits |
+| `https://localhost:{port}/Product/Create` | Créer un produit |
